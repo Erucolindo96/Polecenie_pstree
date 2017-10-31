@@ -1,12 +1,11 @@
 #!usr/bin/perl
 
 package main;
-
+use warnings;
 
  #stale:
  $MAX_TREE_LENGTH;
 
- @proc_descrip;
  #informacje o procesach
  %pid_to_name = ();
  %pid_to_ppid = ();
@@ -28,7 +27,7 @@ sub init
 	open(INP, "pwd |");
 	my $dir_pwd = <INP>;
 	push(@INC, $dir_pwd); 
-	$, = ", ";
+	$, = " ";
 }
 
 
@@ -82,10 +81,12 @@ sub readParameters
 	return  $must_close;
 }
 
+
+
 sub readProcessData
 {
-	open(INP, "ps -e --format=\"pid ppid fname user\" | "); 
-	my $line,  $pid,  $ppid, $user, $name;
+	open(INP, "ps -e --format=\"pid ppid user fname\" | "); 
+	my $line = "";
 	while(<INP>)
 	{
 		$line = <INP>;
@@ -94,16 +95,23 @@ sub readProcessData
 		$line =~ /[ ]*(\d+)[ ]+(\d+)[ ]+(\D+)[ ]+(\D+)/;
 		
 		$pid_to_ppid{$1} = $2;
-		$pid_to_name{$1} = $3;
-		$pid_to_user{$1} = $4;
+		$pid_to_name{$1} = $4;
+		$pid_to_user{$1} = $3;
 		#print $1, $2,$3, $4, "\n";
 	}
-	
+	&initTreeVariable();	
 	close(INP);
-	#ustal jaka jest maksymalna dlugosc drzewa
-	$TREE_LENGTH = length(keys %pid_to_ppid);
 }
+sub initTreeVariable
+{	
+	#ustal jaka jest maksymalna mozliwa dlugosc drzewa
+	$TREE_LENGTH = scalar(keys %pid_to_ppid);
+	foreach $w(@tree)
+	{
+		$w = " ";
+	}
 
+}
 #
 #
 #
@@ -127,6 +135,21 @@ sub printGlobalTables
 	print keys %args_param;
 	print values %args_param;
 	print"\n";
+}
+
+#wypisuje na konsole zmienna globalna "tree"
+#
+#
+sub printTreeVariable
+{
+	print "Begin of tree\n";
+	$size = scalar(@tree);
+	print "Size of tree : $size, $TREE_LENGTH\n";
+	foreach $w(@tree)
+	{
+		print $w, "\n";
+	}
+	print "End of tree\n";
 }
 
 sub printIncorrectSyntax
@@ -167,29 +190,105 @@ sub findUserProcesses
 	#print @user_pids;
 }
 
+
+
+
+
 #zwraca dzieci danego jako argument PIDu 
-sub findChildrens
+sub findChildren
 {
 	my $pid = $_[0];
-	my @childrens = ();
+	my @children = ();
 	foreach $w (keys %pid_to_ppid)
 	{
 		if($pid_to_ppid{$w} == $pid)
 		{
-			push(@childrens,$w );
+			push(@children,$w );
+			print "Dziecko procesu o PID = $pid, nazywa sie $pid_to_name{$w} i ma PID = $w\n";
 		}
 	}
-	return @childrens;
+	return @children;
 }
+
+#oblicza jak wiele linijek potrzebuje na wypisanie swoich dzieci dany proces
+#Argument - PID procesu
+#Zwraca ilośc linijek
+sub howManyLinesNeed
+{
+	my $pid = $_[0];
+	my @my_children = &findChildren($pid);
+	if(scalar(@my_children) == 0)
+	{
+		return 1;
+	}
+	my $lines = 0;
+	foreach $child_pid (@my_children)
+	{
+		$lines = $lines + &howManyLinesNeed($child_pid);
+	}
+	return $lines;
+}
+
 #zwraca string zawierajacy tyle spacji ile podano jako argument
 sub generateSpace
 {
 	$string = "";
-	for(my $i = 0;$i = $_[0]; ++$i)
+	for(my $i = 0;$i < $_[0]; ++$i)
 	{
 		$string = $string." ";
 	}
 	return $string;	
+}
+
+
+sub generateNextNode	#argument 1 - wiersz w ktorym zaczyna pisac swoje pierwsze dziecko
+{			#argument 2 - kolumna w ktorej piszemy 
+			#argument 3 - swoj PID
+			#wartosc zwracana - wiersz w ktorym piszemy kolejne dziecko
+	my $act_line = $_[0], $act_col = $_[1], $begin_col = $_[1], $begin_line = $_[0];
+	my $my_pid = $_[2];
+	my $my_name = $pid_to_name{$my_pid};
+	my @children = &findChildren($my_pid);
+	
+	my $separ_hor = "___", $sep_vert = " | ";
+	my $sep_size = 3;
+
+	#wpisz samego siebie
+	$tree[$act_line] = $tree[$act_line].$my_name;
+	$act_col = $act_col + length($my_name);
+
+	#jesli masz dzieci - dopisz separator poziomy
+	if(scalar(@children) != 0)
+	{
+		$tree[$act_line] = $tree[$act_line].$separ_hor;
+		$act_col = $act_col + $sep_size;
+	}
+
+	#dla kazdego dziecka oblicz ile zajmie linijek
+	#w tylu wierszach - 1 (bo jedna juz jest wypisana) ponizej aktualnego
+	#dodaj tyle spacji ile zajmuje $my_name(od kolumny poczatkowej)
+	#oraz separator pionowy
+	my $lines_needed = 0;
+	foreach $child (@children)
+	{
+		$lines_needed =$lines_needed +  &howManyLinesNeed($child);
+	}
+	$lines_needed--; #bo pierwsza liniom jest nasz napis
+	$space = &generateSpace(length($my_name));
+	for($i = 1; $i <=$lines_needed; $i++)
+	{
+		$tree[$act_line+$i] = $tree[$act_line+$i].$space.$sep_vert;
+	}
+	#wywowaj rekursywnie fcje generateNextNode
+	foreach $child(@children)
+	{
+		$act_line = &generateNextNode($act_line, $act_col, $child);
+		$act_line++;
+	}
+	return $begin_line;
+
+			
+
 }
 
 sub printNextNode	#argument 1 - wiersz w ktorym zaczyna pisac swoje pierwsze dziecko
@@ -197,36 +296,49 @@ sub printNextNode	#argument 1 - wiersz w ktorym zaczyna pisac swoje pierwsze dzi
 			#argument 3 - swoj PID
 			#wartosc zwracana - wiersz w ktorym piszemy kolejne dziecko
 	#stale:
-	my $separ_size = 3;
-	
+	my $separ_size = 3;  # "---"
+	print "Node no. $_[0], $_[1], $_[2] for ";
 	#zmienne
-	my $first_line = $_[0];
-	my $column = $_[1];
+	my $act_line = $_[0], my $act_col = $_[1];	
 	my $my_pid = $_[2];
-	my $act_col = $column, $act_line = $first_line;
-	
-	my @my_childrens = &findChildrens();
-	
+
+	my @my_children = &findChildren($my_pid);
 	#wpisz samego siebe  
-	$tree[$act_line] = $tree[$act_line].$pid_to_name{$my_pid}."---";
+	$tree[$act_line] = $tree[$act_line].$pid_to_name{$my_pid};
+	print " $pid_to_name{$my_pid} ";
+	print"  $tree[$act_line] ";
 
 	#zapisz ile znakow wpisales
-	$act_col = $act_col + length($pid_to_name{$my_pid}) + $separ_size;
+	$act_col = $act_col + length($pid_to_name{$my_pid});
+	print "in line $act_line, in column $act_col ";
 	
-	# dodaj spacje i separator poziomy w kazdej nizszej linii
-	$space_sep = generateSpace($act_col + length($pid_to_name{$my_pid});
-	for(my $i = 0 ; $i < $TREE_LENGTH; ++$i) 
+	#jesli mamy jakies dzieci
+	if(scalar(@my_children) > 0)
 	{
-		$l = $tree[$i];
-		$l = $l.$space_sep." |"."  ";
-	}
+		#dodaj separator poziomy
+		$tree[$act_line] = $tree[$act_line]."___";
+		$act_col = $act_col + $separ_size;
+		print "with separator ___ ";
 
-	my @my_childrens = &findChildrens();
-	for(my $i = 0 ; $i < length @my_childrens; ++$i)
+		# dodaj spacje i separator poziomy w nizszych liniach tyle razy, ile aktualny proc ma dzieci
+		my $space_sep = &generateSpace( length($pid_to_name{$my_pid} )) ;  #ilosc spacji odpowiadajaca dl nazwy procesu
+		for(my $i = $act_line + 1 ; $i < scalar(@my_children); ++$i) 
+		{
+			$tree[$i] = $tree[$i].$space_sep." "."|"." ";#dodajemy spacje i separator poziomy
+			print "with separator | ";
+		}
+	}
+	for(my $i = 0 ; $i < scalar(@my_children); ++$i)
 	{
-		$act_line = printNextNode($act_line, $act_col,$my_cildrens[$i]);
-	}	
+		$act_line = &printNextNode($act_line, $act_col,$my_children[$i]);
+		print "act_line = $act_line \n";
+		
+		#	&printTreeVariable();
+	}
+	return $act_line+1;
 }
+
+
 
 
 sub printTreeToPngFile
@@ -247,6 +359,9 @@ sub printTreeToConsole
 	}
 
 	print "Console tree\n";
+	&generateNextNode(0,0,1);
+
+	&printTreeVariable();
 }
 
 #
@@ -297,43 +412,21 @@ sub main_f
 
 		&chooseOperationAndExecute();
 	}
+
+	&printGlobalTables();
+	#@children = &findChildren(1);
+	#print"Dzieci procesu init: ", @children, "\n";
 	
+	#$one_child = $children[0];
+	#foreach $one_child (@children)
+	#{
+	#	print "Jak wiele linii potrzeba dla procesu o nazwie $pid_to_name{$one_child}: ",  &howManyLinesNeed($one_child), "\n";	
+	#}
 }
 
 
 
 &main_f();
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 
 
