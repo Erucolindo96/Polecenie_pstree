@@ -6,7 +6,6 @@ package main;
 #use warnings;
 use GD;
  #stale:
- $MAX_TREE_LENGTH;
 
  #informacje o procesach
  %pid_to_name = ();
@@ -93,13 +92,11 @@ sub readProcessData
 	{
 		$line = $_;
 		chomp($line);
-		#print $line;
 		$line =~ /[ ]*(\d+)[ ]+(\d+)[ ]+(\D+)[ ]+(\D+)/;
 		
 		$pid_to_ppid{$1} = $2;
 		$pid_to_name{$1} = $4;
 		$pid_to_user{$1} = $3;
-		#print $1, $2,$3, $4, "\n";
 	}
 	&initTreeVariable();	
 	close(INP);
@@ -107,10 +104,9 @@ sub readProcessData
 sub initTreeVariable
 {	
 	#ustal jaka jest maksymalna mozliwa dlugosc drzewa
-	$TREE_LENGTH = scalar(keys %pid_to_ppid);
 	foreach $w(@tree)
 	{
-		$w = " ";
+		$w = "";
 	}
 
 }
@@ -144,14 +140,11 @@ sub printGlobalTables
 #
 sub printTreeVariable
 {
-	#print "Begin of tree\n";
 	$size = scalar(@tree);
-	#print "Size of tree : $size, $TREE_LENGTH\n";
 	foreach $w(@tree)
 	{
 		print $w, "\n";
 	}
-	#print "End of tree\n";
 }
 
 sub printIncorrectSyntax
@@ -185,11 +178,8 @@ sub findUserProcesses
 		if($pid_to_user{$w} eq $user_name)
 		{
 			push(@user_pids, $w);
-			#print "Pid: $w, user: $pid_to_user{$w}\n";
 		}
 	}
-	#print "Wartosc tablicy user_pids : \n";
-	#print @user_pids;
 }
 
 
@@ -206,7 +196,6 @@ sub findChildren
 		if($pid_to_ppid{$w} == $pid)
 		{
 			push(@children,$w );
-			#	print "Dziecko procesu o PID = $pid, nazywa sie $pid_to_name{$w} i ma PID = $w\n";
 		}
 	}
 	return @children;
@@ -260,9 +249,11 @@ sub generateNextNode	#argument 1 - wiersz w ktorym zaczyna pisac swoje pierwsze 
 	$act_col = $act_col + 1 + length($my_name);
 
 	#jesli masz wpisywac rozwniez PIDY - wpisz go
-	$tree[$act_line] = $tree[$act_line]."($my_pid)";
-	$act_col = $act_col + length("($my_pid)");
-
+	if($is_param{"-p"} == 1)
+	{
+		$tree[$act_line] = $tree[$act_line]."($my_pid)";
+		$act_col = $act_col + length("($my_pid)");
+	}
 	#jesli masz dzieci - dopisz separator poziomy
 	if(scalar(@children) != 0)
 	{
@@ -343,7 +334,6 @@ sub printTreeToPngFile
 }
 sub printTreeToConsole
 {
-	print "Console tree\n";
 	if($is_param{"-u"} == 0 )#wypisz cale drzewo
 	{
 		&generateTree();	
@@ -408,15 +398,6 @@ sub main_f
 		&chooseOperationAndExecute();
 	}
 
-	#&printGlobalTables();
-	#@children = &findChildren(1);
-	#print"Dzieci procesu init: ", @children, "\n";
-	
-	#$one_child = $children[0];
-	#foreach $one_child (@children)
-	#{
-	#	print "Jak wiele linii potrzeba dla procesu o nazwie $pid_to_name{$one_child}: ",  &howManyLinesNeed($one_child), "\n";	
-	#}
 }
 
 
