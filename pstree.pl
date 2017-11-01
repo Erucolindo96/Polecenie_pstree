@@ -3,17 +3,13 @@
 
 require GD;
 package main;
-#use warnings;
 use GD;
- #stale:
 
  #informacje o procesach
  %pid_to_name = ();
  %pid_to_ppid = ();
  %pid_to_user = ();
 
- #procesy nalezace do uzytkownika podanego jako parametr
- @user_pids = ();
 
  #parametry skryptu
  %is_param = ("-p" => 0, "-png" =>  0, "-u" => 0, "-help" => 0 );
@@ -22,6 +18,8 @@ use GD;
  #drzewo w postaci tablicy stringow - do wypisania na konsole
  @tree = ();
 
+
+#inicjalizuje zmienne środowiska skryptu 
 sub init
 {
 	#dodajemy katalog skryptu do sciezki poszukiwnia modulow
@@ -33,11 +31,7 @@ sub init
 
 
 #
-#
-#
 #funkcje wczytujace info o parametrach oraz procesach
-#
-#
 #
 sub readParameters
 {
@@ -83,7 +77,7 @@ sub readParameters
 }
 
 
-
+#wczytuje informacje o procesach w systemie
 sub readProcessData
 {
 	open(INP, "ps -e --format=\"pid ppid comm user\" | "); 
@@ -98,19 +92,9 @@ sub readProcessData
 		$pid_to_name{$1} = $3;
 		$pid_to_user{$1} = $4;
 	}
-	&initTreeVariable();	
 	close(INP);
 }
-sub initTreeVariable
-{	
-	#ustal jaka jest maksymalna mozliwa dlugosc drzewa
-	foreach $w(@tree)
-	{
-		$w = "";
-	}
 
-}
-#
 #
 #
 #funkcje wypisujace na konsole 
@@ -160,30 +144,8 @@ sub printHelp
 	print "-p    		  ---> procesy sa wyswietlane wraz ze swoim PIDem\n";
 	print "-u [nazwa_usera]   ---> wyswietla tylko procesy zwiazane z danym uzytkownikiem(oraz rodzicow tych procesow)\n";
 	print "-png [nazwa_pliku] ---> zapisuje drzewo jako obrazek w formacie PNG\n";
+	print "Skrypt domyslnie wyswietla drzewo procesow w oknie konsoli\n";
 }
-
-
-#
-#
-#
-#Znajduje procesy uzytkownika podanego jako parametr skryptu
-#Gromadzi je w tablicy 
-#
-#
-sub findUserProcesses
-{
-	$user_name = $args_param{"-u"};
-	foreach $w (keys %pid_to_user)
-	{
-		if($pid_to_user{$w} eq $user_name)
-		{
-			push(@user_pids, $w);
-		}
-	}
-}
-
-
-
 
 
 #zwraca dzieci danego jako argument PIDu 
@@ -224,8 +186,6 @@ sub howManyLinesNeed
 # Zwraca informacje, czy dany PID ma dzieci, ktore zostaly wywolane przed usera danego jako argument(lub sam nalezy do tego usera)
 # Argument 1 - PID procesu ktorego pytamy,  2 - nazwa usera
 # Zwracana wartość - 1 jeśli ma dzieci nalezace do usera, 0 jesli nie ma
-#
-#
 
 sub haveChildUser
 {
@@ -258,7 +218,7 @@ sub generateSpace
 
 #Rekurencyjnie generuje drzewo od PIDu z ktorego mamy zaczac, oraz wiersza i kolumny w ktorej ma pojawic sie pierwszy proces(korzen drzewa
 #
-#)
+#
 sub generateNextNode	#argument 1 - wiersz w ktorym zaczyna pisac swoje pierwsze dziecko
 {			#argument 2 - kolumna w ktorej piszemy 
 			#argument 3 - swoj PID
@@ -299,7 +259,7 @@ sub generateNextNode	#argument 1 - wiersz w ktorym zaczyna pisac swoje pierwsze 
 			$lines_needed =$lines_needed +  &howManyLinesNeed($child);
 	}
 	$lines_needed--; #bo pierwszom liniom jest nasz napis
-	$space = &generateSpace(length($my_name)+1); #+1 bo przez nasza nazwa dalismy "_"
+	$space = &generateSpace($act_col - $begin_col - 1); #dajemy tyle spacji ile wpisalismy znakow w sumie - 1, bo do tych spacji za chwile dopiszemy sep pionowy 
 	for($i = 1; $i <=$lines_needed; $i++)
 	{
 		$tree[$act_line+$i] = $tree[$act_line+$i].$space.$sep_vert;
@@ -372,7 +332,7 @@ sub generateNextNodeUser	#argument 1 - wiersz w ktorym zaczyna pisac swoje pierw
 			}
 	}
 	$lines_needed--; #bo pierwszom liniom jest nasz napis
-	$space = &generateSpace(length($my_name)+1); #+1 bo przez nasza nazwa dalismy "_"
+	$space = &generateSpace($act_col - $begin_col - 1); #dajemy tyle spacji ile wpisalismy znakow w sumie - 1, bo do tych spacji za chwile dopiszemy sep pionowy 
 	for($i = 1; $i <=$lines_needed; $i++)
 	{
 		$tree[$act_line+$i] = $tree[$act_line+$i].$space.$sep_vert;
@@ -390,8 +350,8 @@ sub generateNextNodeUser	#argument 1 - wiersz w ktorym zaczyna pisac swoje pierw
 }
 
 
-
-sub generateTree #robi to co generateNextNode, ale zaczyna wypisywac
+#zaczyna generowac drzewo od roota. Jezeli nakazano wyswietlic tylko procesu danego usera - robi to
+sub generateTree
 {
 	if($is_param{"-u"} == 0 )
 	{
@@ -401,7 +361,7 @@ sub generateTree #robi to co generateNextNode, ale zaczyna wypisywac
 	{
 		&generateNextNodeUser(0,0,1, $args_param{"-u"} );
 	}
-	$tree[0] = substr($tree[0],1, length($tree[0]) ); 
+	$tree[0] =" ".substr($tree[0],1, length($tree[0]) ); #zastepuje niepotrzebny _ przed korzeniem drzewa spacjom
 }
 
 #Wpisuje do obrazka podanego jako argument kolejne linijki drzewa
@@ -428,6 +388,8 @@ sub printTreeToImage
 	close(FILE);	
 }
 
+
+#generuje drzewo i wypisuje je do pliku png podanego jako argument skryptu
 sub printTreeToPngFile
 {
 
@@ -437,6 +399,8 @@ sub printTreeToPngFile
 	print "Zapisano do pliku: $fname\n";
 
 }
+
+#generuje drzewo i wypisuje je na konsole
 sub printTreeToConsole
 {
 	&generateTree();	
@@ -459,7 +423,6 @@ sub chooseOperationAndExecute
 	}
 	else #nie wybrano wyswietlania pomocy - trzeba w jakis sposob wyswietlic drzewo
 	{
-		#&findUserProcesses if($is_param{"-u"} == 1);
 
 		if($is_param{"-png"} == 1)
 		{
@@ -471,18 +434,6 @@ sub chooseOperationAndExecute
 		}
 	}
 }
-
-#argument - pid
-sub test
-{
-	my $pid = $_[0];
-	my $user = $args_param{"-u"};
-	print "Proces o nazwie $pid_to_name{$pid}";
-	print " Czy ma dzieci o uzytkowniku root? :";
-	print &haveChildUser($pid, $user), "\n";
-	print "nazwa szukanego usera : |", $user, "|\n"  
-}
-
 
 sub main_f
 {	
